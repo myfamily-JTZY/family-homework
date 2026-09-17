@@ -414,8 +414,9 @@ async function addTask(){
     kind:document.getElementById('fKind').value, minutes:parseInt(document.getElementById('fMinutes').value)||0,
     need_photo:document.getElementById('fNeedPhoto').checked, time_track:document.getElementById('fNeedTime').checked!==false,
     stars:1, done:false, photos:[], active_state:'idle', working_sec:0 };
-  await supabase.from('homework').insert(row);
-  document.getElementById('fContent').value=''; document.getElementById('fSubject').value=''; document.getElementById('fMinutes').value='';
+    try { await supabase.from('homework').insert(row); }
+    catch(e){ alert('保存失败：'+ (e&&e.message?e.message:JSON.stringify(e)) + '\n\n若提示表不存在/relation does not exist，说明还没建库：请在 Supabase 的 SQL Editor 里运行 db-setup.sql（见部署指南）。'); return; }
+    document.getElementById('fContent').value=''; document.getElementById('fSubject').value=''; document.getElementById('fMinutes').value='';
   document.getElementById('fNeedPhoto').checked=false;
   await loadToday(); render();
 }
