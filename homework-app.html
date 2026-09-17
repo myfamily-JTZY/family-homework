@@ -311,6 +311,7 @@ async function doLogin(){
 }
 function enterApp(){
   document.getElementById('roleChip').textContent = session.role==='parent'?'家长':'孩子';
+  document.getElementById('addCard').classList.toggle('hidden', session.role!=='parent');
   renderHeader();
   showTab('today');
   bindRealtime();
