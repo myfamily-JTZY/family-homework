@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>家庭作业小管家</title>
 <link rel="icon" href="data:,">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   :root{
     --bg:#FFF6FA; --card:#FFFFFF; --ink:#3A2430; --muted:#8A6B7A;
@@ -602,7 +601,32 @@ async function renderHistory(){
 
 /* ============== 启动 ============== */
 pickRole('child');
-init();
+
+/* ===== 依赖库多地址加载（避免单个 CDN 被墙没反应） ===== */
+var LIB_SOURCES=[
+  'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js',
+  'https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.min.js',
+  'https://gcore.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js',
+  'https://fastly.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js'
+];
+function loadLib(i){
+  i = i||0;
+  if(window.supabase && window.supabase.createClient){ afterLib(); return; }
+  if(i >= LIB_SOURCES.length){ showLibFail(); return; }
+  var s=document.createElement('script');
+  s.src=LIB_SOURCES[i];
+  s.onload=function(){ if(window.supabase&&window.supabase.createClient){ afterLib(); } else { loadLib(i+1); } };
+  s.onerror=function(){ loadLib(i+1); };
+  document.head.appendChild(s);
+}
+function afterLib(){ init(); }
+function showLibFail(){
+  var el=document.getElementById('setupErr');
+  if(el){ el.textContent='连接依赖库失败（多半是广告拦截插件拦了，或网络受限）。请关闭浏览器广告拦截/加速插件后，点下面的"连接"按钮再试一次。'; }
+  var cfg=document.getElementById('cfgUrl'), kk=document.getElementById('cfgKey');
+  if(cfg) cfg.value=localStorage.getItem('sup_url')||''; if(kk) kk.value=localStorage.getItem('sup_key')||'';
+}
+loadLib();
 </script>
 </body>
 </html>
