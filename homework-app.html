@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>家庭作业小管家</title>
+<link rel="icon" href="data:,">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --bg:#FFF6FA; --card:#FFFFFF; --ink:#3A2430; --muted:#8A6B7A;
+    --brand:#D61F69; --brand-2:#FF8FB8; --brand-soft:#FBEEF4;
+    --ok:#3EB489; --warn:#F5B301; --line:#F3DFEA;
+    --radius:18px; --shadow:0 6px 24px rgba(214,31,105,.10);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{font-family:-apple-system,'PingFang SC','Microsoft YaHei','Noto Sans CJK SC',sans-serif;background:var(--bg);color:var(--ink);line-height:1.5}
+  .wrap{max-width:720px;margin:0 auto;padding:0 16px 60px}
+  .hidden{display:none!important}
+
+  header{background:var(--card);border-bottom:1px solid var(--line);padding:12px 16px;position:sticky;top:0;z-index:20;box-shadow:var(--shadow)}
+  .top{max-width:720px;margin:0 auto;display:flex;align-items:center;gap:10px}
+  .brand{font-weight:800;font-size:1.1rem;color:var(--brand);display:flex;align-items:center;gap:8px}
+  .brand .dot{width:14px;height:14px;border-radius:50%;background:var(--brand);box-shadow:0 0 0 4px var(--brand-soft)}
+  .spacer{flex:1}
+  .role-chip{font-size:.8rem;background:var(--brand-soft);color:var(--brand);font-weight:700;padding:4px 12px;border-radius:999px}
+  .icon-btn{border:none;background:var(--brand-soft);color:var(--brand);width:34px;height:34px;border-radius:10px;cursor:pointer;font-size:1rem}
+  .tabs{display:flex;background:var(--brand-soft);border-radius:999px;padding:4px;gap:2px;margin:14px 0}
+  .tabs button{border:none;background:transparent;padding:6px 14px;border-radius:999px;font-size:.88rem;cursor:pointer;color:var(--muted);font-weight:600}
+  .tabs button.active{background:#fff;color:var(--brand);box-shadow:0 2px 8px rgba(214,31,105,.15)}
+
+  .hero{background:linear-gradient(135deg,var(--brand),#E9709F);border-radius:20px;color:#fff;padding:20px;margin:16px 0 0;box-shadow:var(--shadow)}
+  .hero .date{font-size:.85rem;opacity:.92}
+  .hero .hi{font-size:1.25rem;font-weight:800;margin-top:2px}
+  .stars{display:inline-flex;align-items:center;gap:4px;background:rgba(255,255,255,.22);border-radius:999px;padding:4px 14px;font-weight:700;margin-top:8px}
+  .jumbo{display:flex;align-items:center;gap:14px;margin-top:12px}
+  .bar{flex:1;height:12px;background:rgba(255,255,255,.32);border-radius:999px;overflow:hidden}
+  .bar i{display:block;height:100%;width:0%;background:#fff;border-radius:999px;transition:width .4s}
+  .pct{font-weight:800}
+
+  .sec{margin:18px 0}
+  .sec-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+  .sec-head h2{font-size:1.02rem;display:flex;align-items:center;gap:8px}
+  .pill{font-size:.72rem;padding:2px 10px;border-radius:999px;font-weight:700}
+  .pill.home{background:var(--brand-soft);color:var(--brand)}
+  .pill.extra{background:#FFF4E0;color:#B87B00}
+  .items{display:flex;flex-direction:column;gap:10px}
+  .item{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px 16px;box-shadow:var(--shadow)}
+  .item.done{opacity:.72}
+  .item-top{display:flex;gap:12px;align-items:flex-start}
+  .check{flex:0 0 26px;width:26px;height:26px;border-radius:50%;border:2px solid var(--brand-2);background:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px;margin-top:1px;transition:.2s;flex-shrink:0}
+  .check.on{background:var(--ok);border-color:var(--ok)}
+  .ibody{flex:1;min-width:0}
+  .ititle{font-weight:700;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .ititle .subject{background:var(--brand-soft);color:var(--brand);font-size:.72rem;font-weight:800;padding:1px 8px;border-radius:6px}
+  .ititle .stars-ch{color:var(--warn)}
+  .icontent{color:var(--ink);margin-top:3px;font-size:.93rem;white-space:pre-wrap;word-break:break-word}
+  .imeta{margin-top:6px;font-size:.8rem;color:var(--muted);display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+  .needphoto{color:var(--warn);font-weight:700}
+  .actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center}
+  .photo-row{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center}
+  .thumb{width:56px;height:56px;border-radius:12px;overflow:hidden;border:1px solid var(--line);position:relative;flex-shrink:0}
+  .thumb img{width:100%;height:100%;object-fit:cover;display:block}
+  .thumb .del{position:absolute;top:2px;right:2px;background:rgba(0,0,0,.55);color:#fff;border:none;width:16px;height:16px;border-radius:50%;font-size:11px;line-height:1;cursor:pointer}
+  .addphoto .inner{width:56px;height:56px;border:2px dashed var(--brand-2);border-radius:12px;display:flex;align-items:center;justify-content:center;color:var(--brand);font-size:1.5rem;background:#fff;cursor:pointer}
+
+  .empty{text-align:center;color:var(--muted);padding:26px 10px;font-size:.9rem}
+
+  .btn{border:none;cursor:pointer;font-family:inherit;border-radius:12px;padding:9px 14px;font-size:.92rem;font-weight:700;transition:.2s}
+  .btn.primary{background:var(--brand);color:#fff}.btn.primary:hover{background:#c11a5f}
+  .btn.ghost{background:var(--brand-soft);color:var(--brand)}
+  .btn.gray{background:#f0e8ec;color:var(--muted)}
+  .btn.ok{background:var(--ok);color:#fff}
+  .btn.danger{background:#ffe8ee;color:#c22}
+  .btn.sm{padding:6px 10px;font-size:.82rem;border-radius:9px}
+  .btn.full{width:100%}
+
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px;margin-bottom:14px;box-shadow:var(--shadow)}
+  .card h3{font-size:1rem;color:var(--brand);margin-bottom:12px}
+  .form-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+  .form-row.single{grid-template-columns:1fr}
+  label{font-size:.78rem;color:var(--muted);display:block;margin-bottom:4px}
+  input,select,textarea{width:100%;border:1px solid var(--line);border-radius:10px;padding:9px 12px;font-size:.92rem;font-family:inherit;background:#fff;color:var(--ink)}
+  textarea{resize:vertical;min-height:50px}
+  input:focus,select:focus,textarea:focus{outline:2px solid var(--brand-2);border-color:transparent}
+  .checkbox{display:flex;align-items:center;gap:8px;font-size:.85rem;color:var(--muted);margin-top:4px}
+  .checkbox input{width:auto}
+
+  .crow{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:11px 0;border-bottom:1px solid var(--line)}
+  .crow:last-child{border-bottom:none}
+  .crow .cost{color:var(--warn);font-weight:700;white-space:nowrap}
+  .stat{background:var(--brand-soft);border-radius:14px;padding:12px;text-align:center}
+  .stat .n{font-size:1.5rem;font-weight:800;color:var(--brand)}
+  .stat .t{font-size:.78rem;color:var(--muted)}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+
+  .report-list{list-style:none}
+  .report-list li{padding:7px 0;border-bottom:1px dashed var(--line);font-size:.9rem}
+
+  .center{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+  .auth-card{background:#fff;border-radius:24px;padding:28px 24px;width:100%;max-width:400px;box-shadow:var(--shadow);text-align:center}
+  .auth-card h1{font-size:1.3rem;color:var(--brand);margin:10px 0 4px}
+  .auth-card .sub{color:var(--muted);font-size:.85rem;margin-bottom:18px}
+  .pin{font-size:1.4rem;letter-spacing:.5em;text-align:center;font-weight:700}
+  .auth-role{display:flex;gap:8px;margin-bottom:16px}
+  .auth-role button{flex:1;padding:10px;border-radius:12px;border:2px solid var(--line);background:#fff;font-weight:700;cursor:pointer}
+  .auth-role button.active{border-color:var(--brand);color:var(--brand);background:var(--brand-soft)}
+  .err{color:#d33;font-size:.82rem;min-height:18px;margin-top:8px}
+
+  .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:50;padding:16px}
+  .modal-bg.open{display:flex}
+  .modal{background:#fff;border-radius:20px;padding:20px;width:100%;max-width:430px;max-height:86vh;overflow:auto}
+  .modal h3{color:var(--brand);margin-bottom:12px}
+  .modal .btns{display:flex;gap:10px;margin-top:16px;justify-content:flex-end;flex-wrap:wrap}
+  .capture-box{width:100%;border-radius:14px;overflow:hidden;background:#000;margin-bottom:10px;min-height:60px}
+  .capture-box video,.capture-box img{width:100%;display:none;object-fit:contain}
+  .cam-btns{display:flex;gap:8px;flex-wrap:wrap}
+
+  @media(max-width:520px){ .tabs button{padding:6px 9px;font-size:.8rem} .form-row{grid-template-columns:1fr} .grid3{grid-template-columns:1fr 1fr} }
+</style>
+</head>
+<body>
+
+<!-- ======== 配置页（首次需填 Supabase 信息） ======== -->
+<div class="center" id="setup">
+  <div class="auth-card">
+    <div class="brand" style="justify-content:center"><span class="dot"></span>家庭作业小管家</div>
+    <h1>初次使用 · 一键连接</h1>
+    <p class="sub">填入 Supabase 项目信息（见 D:\CC\homework-app\setup-guide.md 第 3 步取到的两个字符串）</p>
+    <div style="text-align:left">
+      <div style="margin-bottom:10px"><label>Project URL</label><input id="cfgUrl" placeholder="https://xxxx.supabase.co"></div>
+      <div style="margin-bottom:6px"><label>Anon Public Key</label><input id="cfgKey" placeholder="eyJhbGciOi..."></div>
+      <div style="text-align:center;color:var(--muted);font-size:.76rem;margin-top:6px">信息仅保存在当前浏览器，不会上传。</div>
+    </div>
+    <button class="btn primary full" style="margin-top:14px" onclick="saveConfig()">连接</button>
+    <div class="err" id="setupErr"></div>
+  </div>
+</div>
+
+<!-- ======== 登录页 ======== -->
+<div class="center hidden" id="login">
+  <div class="auth-card">
+    <div class="brand" style="justify-content:center"><span class="dot"></span>家庭作业小管家</div>
+    <h1>今天也要加油哦</h1>
+    <p class="sub">选择身份 · 输入口令进入</p>
+    <div class="auth-role">
+      <button data-role="parent" onclick="pickRole('parent')">👩 家长</button>
+      <button data-role="child" onclick="pickRole('child')">🧒 孩子</button>
+    </div>
+    <input id="pinInput" class="pin" type="password" inputmode="numeric" maxlength="12" placeholder="••••" onkeydown="if(event.key==='Enter')doLogin()">
+    <button class="btn primary full" style="margin-top:14px" onclick="doLogin()">进入</button>
+    <div class="err" id="loginErr"></div>
+  </div>
+</div>
+
+<!-- ======== 主界面 ======== -->
+<div id="app" class="hidden">
+<header>
+  <div class="top">
+    <div class="brand"><span class="dot"></span>家庭作业小管家</div>
+    <div class="spacer"></div>
+    <span class="role-chip" id="roleChip">孩子</span>
+    <button class="icon-btn" title="退出" onclick="logout()">⏻</button>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="hero">
+    <div class="date" id="heroDate"></div>
+    <div class="hi" id="heroHi"></div>
+    <div id="heroStars"></div>
+    <div class="jumbo"><div class="bar"><i id="barFill"></i></div><div class="pct" id="pct">0%</div></div>
+  </div>
+
+  <div class="tabs" id="tabsBar">
+    <button data-tab="today" class="active">📋 今日</button>
+    <button data-tab="stars">⭐ 星星</button>
+    <button data-tab="report">📈 复盘</button>
+    <button data-tab="history">🗓️ 历史</button>
+  </div>
+
+  <div id="tab-today">
+    <div class="card hidden" id="addCard">
+      <h3>✦ 布置今天的作业</h3>
+      <div class="form-row"><div><label>作业内容 *</label><input id="fContent" placeholder="例：完成语文第3课生字抄写"></div><div><label>科目</label><input id="fSubject" placeholder="例：语文 / 数学"></div></div>
+      <div class="form-row"><div><label>分类</label><select id="fKind"><option value="homework">家庭作业（老师布置）</option><option value="extra">额外作业（家长安排）</option></select></div><div><label>预计用时（分钟）</label><input id="fMinutes" type="number" min="0" placeholder="30"></div></div>
+      <div class="checkbox"><input type="checkbox" id="fNeedPhoto"><span>需要拍照 / 上传照片留证</span></div>
+      <div class="checkbox"><input type="checkbox" id="fNeedTime" checked><span>启用开始/结束计时（用于耗时与按时星）</span></div>
+      <button class="btn primary full" style="margin-top:10px" onclick="addTask()">＋ 添加到今天</button>
+    </div>
+
+    <div class="sec"><div class="sec-head"><h2>📚 家庭作业 <span class="pill home">老师布置</span></h2></div><div class="items" id="homeList"></div></div>
+    <div class="sec"><div class="sec-head"><h2>🌟 额外作业 <span class="pill extra">家长安排</span></h2></div><div class="items" id="extraList"></div></div>
+  </div>
+
+  <div id="tab-stars" class="hidden">
+    <div id="starsChild" class="hidden">
+      <div class="card"><h3>⭐ 用星星换奖品</h3><div id="prizeListChild"></div></div>
+      <div class="card"><h3>📨 我的兑换申请</h3><div id="myRedemptions"></div></div>
+    </div>
+    <div id="starsParent" class="hidden">
+      <div class="card">
+        <h3>🏆 奖品库</h3><div id="prizeListParent"></div>
+        <div style="display:flex;gap:8px;margin-top:6px">
+          <input id="pName" placeholder="奖品名称，如：20分钟动画片" style="flex:1">
+          <input id="pCost" type="number" min="1" placeholder="★数" style="width:88px">
+          <button class="btn primary" onclick="addPrize()">＋</button>
+        </div>
+      </div>
+      <div class="card"><h3>📨 兑换审批</h3><div id="redemptList"></div></div>
+      <div class="card">
+        <h3>🔑 修改口令</h3>
+        <div class="form-row"><div><label>家长口令</label><input id="pinParent"></div><div><label>孩子口令</label><input id="pinChild"></div></div>
+        <button class="btn ghost" onclick="savePins()">保存口令</button>
+      </div>
+    </div>
+    <div class="card"><h3>📊 本周星星</h3><div class="grid3">
+      <div class="stat"><div class="n" id="wkEarned">0</div><div class="t">本周获得</div></div>
+      <div class="stat"><div class="n" id="wkRedeem">0</div><div class="t">本周已兑</div></div>
+      <div class="stat"><div class="n" id="wkBalance">0</div><div class="t">当前余额</div></div>
+    </div></div>
+  </div>
+
+  <div id="tab-report" class="hidden">
+    <div class="card"><h3>📈 本周复盘（周一至今日）</h3>
+      <div class="grid3">
+        <div class="stat"><div class="n" id="rCount">0</div><div class="t">已布置</div></div>
+        <div class="stat"><div class="n" id="rDone">0</div><div class="t">已完成</div></div>
+        <div class="stat"><div class="n" id="rRate">0%</div><div class="t">完成率</div></div>
+      </div>
+      <div style="height:10px"></div>
+      <div class="stat" style="text-align:left;background:#fff;border:1px solid var(--line)">
+        <div style="font-size:.85rem;color:var(--muted);font-weight:700;margin-bottom:4px">平均每项耗时</div>
+        <div style="font-size:1.4rem;font-weight:800" id="rAvg">—</div>
+      </div>
+    </div>
+    <div class="card"><h3>⏳ 未完成项</h3><ul class="report-list" id="rUndone"></ul></div>
+    <div class="card"><h3>⏱ 每项耗时明细</h3><ul class="report-list" id="rTimes"></ul></div>
+  </div>
+
+  <div id="tab-history" class="hidden">
+    <div class="card"><h3>🗓️ 历史完成情况</h3><div id="historyList"></div></div>
+  </div>
+</div>
+</div>
+
+<!-- ===== 拍照弹窗 ===== -->
+<div class="modal-bg" id="camModal">
+  <div class="modal">
+    <h3>📷 为作业留证</h3>
+    <div class="capture-box"><video id="video"></video><img id="snap" alt=""></div>
+    <div class="cam-btns">
+      <button class="btn ghost" id="btnOpenCam">打开摄像头</button>
+      <button class="btn primary" id="btnShoot">拍照</button>
+      <button class="btn ghost" id="btnRetake">重拍</button>
+    </div>
+    <div style="text-align:center;color:var(--muted);font-size:.82rem;margin:8px 0">或上传一张照片</div>
+    <input type="file" id="fileInput" accept="image/*">
+    <div class="btns">
+      <button class="btn ghost" onclick="closeCam()">取消</button>
+      <button class="btn primary" id="btnUse">使用这张照片</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 灯箱 ===== -->
+<div class="modal-bg" id="lightbox" onclick="if(event.target===this)this.classList.remove('open')">
+  <div class="modal" style="text-align:center">
+    <img id="lbImg" style="max-width:100%;border-radius:12px">
+    <div class="btns"><button class="btn ghost" onclick="document.getElementById('lightbox').classList.remove('open')">关闭</button></div>
+  </div>
+</div>
+
+<script>
+var supabase=null;
+var session={role:'child'};
+var today=[], settings={parent_pin:'8888',child_pin:'1234'}, prizes=[], redemptions=[];
+var camTarget=null, capturedDataUrl=null, stream=null, activeTimer=null;
+
+/* ============== 配置 & 初始化 ============== */
+function saveConfig(){
+  var u=document.getElementById('cfgUrl').value.trim(), k=document.getElementById('cfgKey').value.trim();
+  if(!u||!k){ document.getElementById('setupErr').textContent='请填写 Project URL 和 Anon Key'; return; }
+  localStorage.setItem('sup_url',u); localStorage.setItem('sup_key',k);
+  location.reload();
+}
+function init(){
+  var u=localStorage.getItem('sup_url'), k=localStorage.getItem('sup_key');
+  if(!u||!k){ document.getElementById('setup').classList.remove('hidden'); return; }
+  supabase=window.supabase.createClient(u,k);
+  document.getElementById('setup').classList.add('hidden');
+  document.getElementById('login').classList.remove('hidden');
+}
+
+function pickRole(r){ session.role=r; document.querySelectorAll('.auth-role button').forEach(b=>b.classList.toggle('active',b.dataset.role===r)); }
+async function loadSettings(){
+  try{ var r=await supabase.from('settings').select('*').eq('id',1).maybeSingle(); if(r.data) settings=r.data; }catch(e){ console.log(e); }
+}
+async function doLogin(){
+  var p=document.getElementById('pinInput').value;
+  document.getElementById('loginErr').textContent='';
+  if(!supabase) return;
+  await loadSettings();
+  var ok = session.role==='parent' ? (p===settings.parent_pin) : (p===settings.child_pin);
+  if(!ok){ document.getElementById('loginErr').textContent='口令不对，再试一次'; return; }
+  document.getElementById('pinInput').value='';
+  document.getElementById('login').classList.add('hidden');
+  document.getElementById('app').classList.remove('hidden');
+  sessionStorage.setItem('hw_role',session.role);
+  enterApp();
+}
+function enterApp(){
+  document.getElementById('roleChip').textContent = session.role==='parent'?'家长':'孩子';
+  renderHeader();
+  showTab('today');
+  bindRealtime();
+  registerTimer();
+  loadAll();
+}
+function logout(){ if(activeTimer)clearInterval(activeTimer); sessionStorage.removeItem('hw_role'); location.reload(); }
+
+function renderHeader(){
+  var d=new Date(); var w=['日','一','二','三','四','五','六'][d.getDay()];
+  document.getElementById('heroDate').textContent = todayStr()+' 周'+w;
+  document.getElementById('heroHi').textContent = session.role==='child' ? '今天的事，今天完成！' : '家长工作台 · 今日安排';
+}
+
+/* ============== 数据 ============== */
+function todayStr(){ var d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function weekStart(){ var d=new Date(); var day=(d.getDay()+6)%7; d.setDate(d.getDate()-day); return d; }
+function secNow(){ return Math.floor(Date.now()/1000); }
+
+async function loadAll(){ await loadSettings(); await Promise.all([loadToday(),loadPrizes(),loadRedemptions()]); render(); }
+async function loadToday(){ try{ var r=await supabase.from('homework').select('*').eq('task_date',todayStr()).order('created_at'); today=r.data||[]; }catch(e){ console.log(e); } }
+async function loadPrizes(){ try{ var r=await supabase.from('prizes').select('*').eq('active',true).order('created_at'); prizes=r.data||[]; }catch(e){ console.log(e); } }
+async function loadRedemptions(){ try{ var r=await supabase.from('redemptions').select('*').order('requested_at',{ascending:false}); redemptions=r.data||[]; }catch(e){ console.log(e); } }
+function bindRealtime(){ supabase.channel('hw-realtime').on('postgres_changes',{event:'*',schema:'public',table:'homework'},function(){ loadToday().then(render); }).subscribe(); }
+
+/* ============== 渲染 ============== */
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function fmtDur(sec){ sec=sec||0; var h=Math.floor(sec/3600),m=Math.floor(sec%3600/60),s=sec%60; return (h?h+'时':'')+(m?m+'分':'')+(s+'秒')||'0秒'; }
+function workingOf(t){ return (t.working_sec||0) + (t.active_state==='running'? secNow()-Math.floor(new Date(t.start_active_at).getTime()/1000):0); }
+
+function taskCard(t){
+  var done=t.done, live=(!done&&t.active_state==='running');
+  var working=workingOf(t);
+  var photos=(t.photos||[]).map(function(p){
+    var d= session.role==='parent'? `<button class="del" onclick="delPhoto('${t.id}','${esc(p.id)}')">×</button>`:'';
+    return `<span class="thumb"><img src="${esc(p.url)}" onclick="showLb('${esc(p.url)}')">${d}</span>`;
+  }).join('');
+  var addPhoto = (!done && t.need_photo && session.role!=='parent') ? `<span class="thumb addphoto"><span class="inner" onclick="openCamInit('${t.id}')">+</span></span>`:'';
+  var timeCtrl='';
+  if(!done && t.time_track){
+    if(t.active_state==='idle') timeCtrl=`<button class="btn ghost sm" onclick="setState('${t.id}','start')">▶ 开始</button>`;
+    else if(t.active_state==='running') timeCtrl=`<button class="btn gray sm" onclick="setState('${t.id}','pause')">⏸ 休息</button>`;
+    else if(t.active_state==='paused') timeCtrl=`<button class="btn ghost sm" onclick="setState('${t.id}','start')">▶ 继续</button>`;
+  }
+  var finish = done? '' : `<button class="btn ok sm" onclick="setDone('${t.id}',true)">✓ 完成</button>`;
+  var trash = session.role==='parent'? `<button class="btn danger sm" onclick="delTask('${t.id}')">删除</button>`:'';
+  return `<div class="item ${done?'done':''}">
+    <div class="item-top">
+      <div class="check ${done?'on':''}" onclick="setDone('${t.id}',${!done})">${done?'✓':''}</div>
+      <div class="ibody">
+        <div class="ititle"><span class="subject">${esc(t.subject||'未分类')}</span>${esc(t.content)} <span class="stars-ch">★${t.stars||1}</span></div>
+        <div class="icontent"></div>
+        <div class="imeta">
+          ${t.need_photo?'<span class="needphoto">📷 需拍照</span>':''}
+          ${t.minutes?'⏱ 预计 '+t.minutes+' 分钟':''}
+          ${working>0?'⏲ 已用 '+fmtDur(working):''}${live?' <span class="live">…</span>':''}
+          ${done&&t.completed_at?'✅ '+new Date(t.completed_at).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'}):''}
+        </div>
+        ${(photos||addPhoto)?`<div class="photo-row">${photos}${addPhoto}</div>`:''}
+        <div class="actions">${timeCtrl}${finish}${trash}</div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function render(){
+  renderHeader();
+  var home=today.filter(t=>t.kind!=='extra'), extra=today.filter(t=>t.kind==='extra');
+  document.getElementById('homeList').innerHTML=home.length?home.map(taskCard).join(''):'<div class="empty">今天还没有家庭作业 ✨</div>';
+  document.getElementById('extraList').innerHTML=extra.length?extra.map(taskCard).join(''):'<div class="empty">暂无额外作业 🌟</div>';
+  var total=today.length, doneCnt=today.filter(t=>t.done).length;
+  var pct=total?Math.round(doneCnt/total*100):0;
+  document.getElementById('barFill').style.width=pct+'%'; document.getElementById('pct').textContent=pct+'%';
+  renderStars(); renderReport(); renderHistory();
+}
+
+/* ---------- live ticker ---------- */
+function registerTimer(){ if(activeTimer)clearInterval(activeTimer); activeTimer=setInterval(function(){
+  document.querySelectorAll('.item:not(.done)').forEach(function(el,ix){
+    var t=today.filter(x=>!x.done)[ix]; if(!t)return;
+    if(t.active_state==='running'){ var m=el.querySelector('.imeta'); var span=el.querySelector('.live'); if(span) span.textContent=' · '+fmtDur(workingOf(t)); }
+  });
+},1000); }
+
+/* ============== Tab ============== */
+function showTab(tab){
+  document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
+  ['today','stars','report','history'].forEach(function(k){ document.getElementById('tab-'+k).classList.toggle('hidden',k!==tab); });
+  if(tab==='stars'){ document.getElementById('starsChild').classList.toggle('hidden',session.role!=='child'); document.getElementById('starsParent').classList.toggle('hidden',session.role!=='parent'); renderStars(); }
+  if(tab==='report') renderReport();
+  if(tab==='history') renderHistory();
+}
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=function(){ showTab(b.dataset.tab); });
+
+/* ============== 家长：布置/删除 ============== */
+async function addTask(){
+  var content=document.getElementById('fContent').value.trim();
+  if(!content){ alert('请填写作业内容'); return; }
+  var row={ task_date:todayStr(), content:content, subject:document.getElementById('fSubject').value.trim(),
+    kind:document.getElementById('fKind').value, minutes:parseInt(document.getElementById('fMinutes').value)||0,
+    need_photo:document.getElementById('fNeedPhoto').checked, time_track:document.getElementById('fNeedTime').checked!==false,
+    stars:1, done:false, photos:[], active_state:'idle', working_sec:0 };
+  await supabase.from('homework').insert(row);
+  document.getElementById('fContent').value=''; document.getElementById('fSubject').value=''; document.getElementById('fMinutes').value='';
+  document.getElementById('fNeedPhoto').checked=false;
+  await loadToday(); render();
+}
+async function delTask(id){ if(!confirm('确定删除这项作业？')) return; await supabase.from('homework').delete().eq('id',id); await loadToday(); render(); }
+
+/* ============== 完成 & 计时 ============== */
+function calcStars(t){
+  if(!t.time_track || !t.minutes) return t.stars||1;
+  return (t.stars||1) + ((workingOf(t)>0 && workingOf(t)<=t.minutes*60)?1:0);
+}
+async function setDone(id,val){
+  var t=today.find(x=>x.id===id); if(!t) return;
+  var upd={ done:val };
+  if(val){ upd.active_state='done'; upd.completed_at=new Date().toISOString();
+    upd.working_sec=workingOf(t); upd.stars=calcStars(t); }
+  else { upd.active_state='idle'; upd.completed_at=null; upd.working_sec=0; }
+  await supabase.from('homework').update(upd).eq('id',id); await loadToday(); render();
+}
+async function setState(id,action){
+  var t=today.find(x=>x.id===id); if(!t) return; var upd={};
+  if(action==='start'){ upd.active_state='running'; upd.start_active_at=new Date().toISOString(); }
+  else if(action==='pause'){ upd.active_state='paused'; upd.working_sec=workingOf(t); upd.start_active_at=null; }
+  await supabase.from('homework').update(upd).eq('id',id); await loadToday(); render();
+}
+
+/* ============== 照片（Supabase 存储） ============== */
+function openCamInit(id){ camTarget=id; capturedDataUrl=null; document.getElementById('fileInput').value=''; stopStream();
+  document.getElementById('btnUse').onclick=useCam;
+  openCamBox(); }
+function openCamBox(){ document.getElementById('snap').style.display='none'; document.getElementById('video').style.display='none'; document.getElementById('camModal').classList.add('open'); }
+function closeCam(){ document.getElementById('camModal').classList.remove('open'); stopStream(); camTarget=null; capturedDataUrl=null; }
+
+document.getElementById('btnOpenCam').onclick=async function(){ try{
+  stopStream(); stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
+  var v=document.getElementById('video'); v.srcObject=stream; v.onloadedmetadata=function(){ v.play(); };
+  v.style.display='block'; document.getElementById('snap').style.display='none'; capturedDataUrl=null;
+}catch(e){ alert('无法打开摄像头，请允许权限或用上传照片'); } };
+document.getElementById('btnShoot').onclick=function(){
+  var v=document.getElementById('video'); if(v.srcObject==null&&!v.videoWidth){ alert('请先打开摄像头'); return; }
+  var c=document.createElement('canvas'); c.width=v.videoWidth||640; c.height=v.videoHeight||480;
+  c.getContext('2d').drawImage(v,0,0); capturedDataUrl=c.toDataURL('image/jpeg',0.8);
+  var s=document.getElementById('snap'); s.src=capturedDataUrl; s.style.display='block'; v.style.display='none';
+};
+document.getElementById('btnRetake').onclick=function(){ capturedDataUrl=null; document.getElementById('snap').style.display='none';
+  var v=document.getElementById('video'); if(stream) v.style.display='block'; };
+document.getElementById('fileInput').onchange=function(){ var f=this.files[0]; if(!f) return; var r=new FileReader(); r.onload=function(d){ capturedDataUrl=d.target.result; var s=document.getElementById('snap'); s.src=capturedDataUrl; s.style.display='block'; document.getElementById('video').style.display='none'; }; r.readAsDataURL(f); };
+
+function useCam(){
+  if(!capturedDataUrl){ alert('请先拍照或选择照片'); return; }
+  uploadPhoto(capturedDataUrl);
+}
+async function uploadPhoto(dataUrl){
+  if(!supabase) return;
+  var bytes=atob(dataUrl.split(',')[1]), arr=new Uint8Array(bytes.length);
+  for(var i=0;i<bytes.length;i++)arr[i]=bytes.charCodeAt(i);
+  var fname= 'photo-'+Date.now()+'.jpg';
+  var res=await supabase.storage.from('hw-photos').upload(fname,arr,{contentType:'image/jpeg'});
+  var pub = supabase.storage.from('hw-photos').getPublicUrl(fname).data.publicUrl;
+  var t=today.find(x=>x.id===camTarget); if(!t) return;
+  var list=(t.photos||[]).concat([{id:fname,url:pub}]);
+  await supabase.from('homework').update({photos:list}).eq('id',camTarget);
+  closeCam(); await loadToday(); render();
+}
+async function delPhoto(taskId,pid){
+  if(!confirm('删除这张照片？')) return;
+  var t=today.find(x=>x.id===taskId); if(!t) return;
+  await supabase.storage.from('hw-photos').remove([pid]).catch(function(){});
+  await supabase.from('homework').update({photos:(t.photos||[]).filter(p=>p.id!==pid)}).eq('id',taskId);
+  await loadToday(); render();
+}
+function stopStream(){ if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; } }
+function showLb(src){ document.getElementById('lbImg').src=src; document.getElementById('lightbox').classList.add('open'); }
+
+/* ============== 星星 / 奖品 ============== */
+async function addPrize(){
+  var name=document.getElementById('pName').value.trim(), cost=parseInt(document.getElementById('pCost').value);
+  if(!name||!cost){ alert('请填写奖品和所需星星'); return; }
+  await supabase.from('prizes').insert({name:name,cost:cost,active:true});
+  document.getElementById('pName').value=''; document.getElementById('pCost').value='';
+  await loadPrizes(); renderStars();
+}
+async function delPrize(id){ await supabase.from('prizes').update({active:false}).eq('id',id); await loadPrizes(); renderStars(); }
+async function requestRedeem(prizeId){
+  var p=prizes.find(x=>x.id===prizeId); if(!p) return;
+  if(balance()<p.cost){ alert('星星不够哦，还差 '+(p.cost-balance())+' 颗'); return; }
+  await supabase.from('redemptions').insert({prize_id:p.id,prize_name:p.name,cost:p.cost,status:'pending'});
+  await loadRedemptions(); renderStars();
+}
+async function respondRedeem(id,status){ await supabase.from('redemptions').update({status:status,responded_at:new Date().toISOString()}).eq('id',id); await loadRedemptions(); renderStars(); }
+async function savePins(){
+  await supabase.from('settings').update({parent_pin:document.getElementById('pinParent').value.trim()||settings.parent_pin, child_pin:document.getElementById('pinChild').value.trim()||settings.child_pin}).eq('id',1);
+  await loadSettings(); document.getElementById('pinParent').value=''; document.getElementById('pinChild').value='';
+  alert('口令已保存');
+}
+
+function dstr2(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function redeemedThisWeek(){ var s=weekStart(); s.setHours(0,0,0,0); var t=s.getTime(); return redemptions.filter(r=>r.status==='approved'&&new Date(r.responded_at).getTime()>=t).reduce((a,r)=>a+r.cost,0); }
+
+var earnSumCache=0;
+async function refreshEarned(){
+  try{
+    var wstart=weekStart(), end=new Date(), dates=[], d=new Date(wstart);
+    while(d<=end){ dates.push(dstr2(d)); d.setDate(d.getDate()+1); }
+    earnSumCache=0;
+    if(dates.length){ var r=await supabase.from('homework').select('stars').in('task_date',dates).eq('done',true); earnSumCache=(r.data||[]).reduce(function(a,x){return a+(x.stars||0);},0); }
+  }catch(e){ earnSumCache=0; }
+}
+
+function renderStars(){
+  refreshEarned().then(function(){
+    var redeemedN=redeemedThisWeek();
+    var bal=earnSumCache-redeemedN;
+    if(bal<0) bal=0;
+    safeSet('wkEarned',earnSumCache);
+    safeSet('wkRedeem',redeemedN);
+    safeSet('wkBalance',bal);
+    if(document.getElementById('heroStars')) document.getElementById('heroStars').innerHTML='⭐ 星星 '+bal;
+    renderPrizeLists(); renderRedemptions();
+  });
+}
+function balance(){ return earnSumCache - redeemedThisWeek(); }
+function safeSet(id,n){ var el=document.getElementById(id); if(el) el.textContent=n; }
+function renderPrizeLists(bal){
+  // 家长奖品库
+  document.getElementById('prizeListParent').innerHTML = prizes.map(p=>`
+    <div class="crow"><span>${esc(p.name)}</span><span class="cost">★ ${p.cost}</span><button class="btn danger sm" onclick="delPrize('${p.id}')">删</button></div>`).join('')||'<div class="empty">还没有奖品，先添加一个吧</div>';
+  // 孩子可兑换
+  document.getElementById('prizeListChild').innerHTML = prizes.map(p=>`
+    <div class="crow"><span>${esc(p.name)}</span><span class="cost">★ ${p.cost}</span><button class="btn primary sm" onclick="requestRedeem('${p.id}')">兑换</button></div>`).join('')||'<div class="empty">奖品库是空的，请家长先添加~</div>';
+}
+function renderRedemptions(){
+  var el=document.getElementById( session.role==='parent'?'redemptList':'myRedemptions');
+  if(session.role==='parent'){
+    el.innerHTML=redemptions.filter(r=>r.status==='pending').map(r=>`
+      <div class="crow"><span>${esc(r.prize_name)} <span class="cost">★${r.cost}</span></span>
+        <span><button class="btn ok sm" onclick="respondRedeem('${r.id}','approved')">批准</button>
+        <button class="btn danger sm" onclick="respondRedeem('${r.id}','rejected')">拒绝</button></span></div>`).join('')||'<div class="empty">暂无待审批申请</div>';
+  } else {
+    el.innerHTML=redemptions.map(r=>{
+      var st=r.status==='pending'?'⏳待家长批准':(r.status==='approved'?'✅已兑换':'❌未通过');
+      return `<div class="crow"><span>${esc(r.prize_name)}</span><span>${st}</span></div>`;
+    }).join('')||'<div class="empty">还没有兑换申请</div>';
+  }
+  // 回填口令框
+  document.getElementById('pinParent').value=settings.parent_pin; document.getElementById('pinChild').value=settings.child_pin;
+}
+
+/* ============== 复盘 ============== */
+async function renderReport(){
+  if(document.getElementById('tab-report').classList.contains('hidden')) return;
+  var wstart=weekStart(), wstartS=dstr2(wstart), todayS=todayStr();
+  var r=await supabase.from('homework').select('*').gte('task_date',wstartS);
+  var rows=(r.data||[]).filter(x=>x.task_date<=todayS);
+  var done=rows.filter(x=>x.done);
+  var dates=new Set(rows.map(x=>x.task_date));
+  var days=dates.size||1;
+  safeSet('rCount',rows.length); safeSet('rDone',done.length); safeSet('rRate',(rows.length?Math.round(done.length/rows.length*100):0)+'%');
+  var withTime=rows.filter(x=>x.time_track&&x.working_sec>0 && x.done);
+  var avg=withTime.length? withTime.reduce((a,x)=>a+x.working_sec,0)/withTime.length:0;
+  document.getElementById('rAvg').textContent = avg? fmtDur(Math.round(avg)) : '—';
+  var undo=rows.filter(x=>!x.done);
+  document.getElementById('rUndone').innerHTML= undo.length? undo.slice(0,12).map(x=>`<li>${esc(x.task_date)} · ${esc(x.subject||'')} ${esc(x.content)}</li>`).join(''):'<li style="border:none;color:var(--muted)">本周全部完成 🎉</li>';
+  var times=rows.filter(x=>x.done&&x.working_sec>=0);
+  var todayTask=today.filter(x=>x.done);
+  var allTimes = todayTask.concat(rows.filter(x=>x.done&&x.task_date!==todayS));
+  var uniqMap={}; allTimes.forEach(x=>{ if(x.working_sec>0 && !uniqMap[x.id]) uniqMap[x.id]=x; });
+  var list=Object.values(uniqMap).slice(0,20);
+  document.getElementById('rTimes').innerHTML= list.length? list.map(x=>`<li>${esc(x.subject||'')} ${esc(x.content).slice(0,18)} · ${fmtDur(x.working_sec)} ${x.time_track?('(★'+x.stars+')'):''}</li>`).join(''):'<li style="border:none;color:var(--muted)">本周还没有计时记录</li>';
+}
+
+/* ============== 历史 ============== */
+async function renderHistory(){
+  if(document.getElementById('tab-history').classList.contains('hidden')) return;
+  var r=await supabase.from('homework').select('task_date,done,stars,content\:content');
+  var rows=r.data||[];
+  var map={};
+  rows.forEach(x=>{ map[x.task_date]=map[x.task_date]||{t:0,d:0}; map[x.task_date].t++; if(x.done)map[x.task_date].d++; });
+  var dates=Object.keys(map).sort().reverse();
+  document.getElementById('historyList').innerHTML= dates.length? dates.map(function(d){
+    var m=map[d], pct=m.t?Math.round(m.d/m.t*100):0;
+    return `<div class="crow"><span>${esc(d)}</span><span class="cost">${m.d}/${m.t} · ${pct}%</span></div>`;
+  }).join(''):'<div class="empty">还没有历史，今天开始记录吧~</div>';
+}
+
+/* ============== 启动 ============== */
+pickRole('child');
+init();
+</script>
+</body>
+</html>
