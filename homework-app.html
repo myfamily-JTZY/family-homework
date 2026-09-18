@@ -122,6 +122,9 @@
   .capture-box video,.capture-box img{width:100%;display:none;object-fit:contain}
   .cam-btns{display:flex;gap:8px;flex-wrap:wrap}
 
+  .toast{position:fixed;top:14px;left:50%;transform:translateX(-50%) translateY(-8px);background:var(--ok);color:#fff;font-weight:700;padding:11px 18px;border-radius:12px;box-shadow:0 6px 24px rgba(0,0,0,.18);z-index:100;opacity:0;pointer-events:none;transition:.25s;max-width:92vw}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
   @media(max-width:520px){ .tabs button{padding:6px 9px;font-size:.8rem} .form-row{grid-template-columns:1fr} .grid3{grid-template-columns:1fr 1fr} }
 </style>
 </head>
@@ -197,7 +200,7 @@
     </div>
 
     <div class="sec"><div class="sec-head"><h2>📚 家庭作业 <span class="pill home">老师布置</span></h2></div><div class="items" id="homeList"></div></div>
-    <div class="sec"><div class="sec-head"><h2>🌟 校外作业 <span class="pill extra">家长安排</span></h2></div><div class="items" id="extraList"></div></div>
+    <div class="sec"><div class="sec-head"><h2>🌟 校外作业</h2></div><div class="items" id="extraList"></div></div>
   </div>
 
   <div id="tab-stars" class="hidden">
@@ -278,11 +281,13 @@
   </div>
 </div>
 
+<div class="toast" id="toast"></div>
 <script>
 var supabase=null;
 var session={role:'child'};
 var today=[], settings={parent_pin:'8888',child_pin:'1234'}, prizes=[], redemptions=[];
 var camTarget=null, capturedDataUrl=null, stream=null, activeTimer=null;
+var pollTimer=null, notifyTimer=null, prevDone={}, pollReady=false;
 
 /* ============== 配置 & 初始化 ============== */
 function saveConfig(){
@@ -323,9 +328,23 @@ function enterApp(){
   showTab('today');
   bindRealtime();
   registerTimer();
+  startPoll();
   loadAll();
 }
-function logout(){ if(activeTimer)clearInterval(activeTimer); sessionStorage.removeItem('hw_role'); location.reload(); }
+/* ============== 自动同步 & 完成提示 ============== */
+function notify(msg){ var el=document.getElementById('toast'); if(!el)return; el.textContent=msg; el.classList.add('show'); clearTimeout(notifyTimer); notifyTimer=setTimeout(function(){ el.classList.remove('show'); },4000); }
+async function tickSync(){
+  try{ await loadToday(); }catch(e){}
+  if(!pollReady){ today.forEach(function(t){ prevDone[t.id]=!!t.done; }); pollReady=true; }
+  else{ today.forEach(function(t){
+    if(t.done && !prevDone[t.id]){ notify(session.role==='parent' ? '✅ 孩子已完成：'+t.content : '✅ 已完成：'+t.content); }
+    prevDone[t.id]=!!t.done;
+  }); }
+  render();
+  try{ await Promise.all([loadPrizes(),loadRedemptions()]); renderStars(); }catch(e){}
+}
+function startPoll(){ if(pollTimer)clearInterval(pollTimer); pollReady=false; prevDone={}; tickSync(); pollTimer=setInterval(tickSync,6000); }
+function logout(){ if(activeTimer)clearInterval(activeTimer); if(pollTimer)clearInterval(pollTimer); sessionStorage.removeItem('hw_role'); location.reload(); }
 
 function renderHeader(){
   var d=new Date(); var w=['日','一','二','三','四','五','六'][d.getDay()];
