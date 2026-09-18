@@ -249,7 +249,19 @@
   </div>
 
   <div id="tab-history" class="hidden">
-    <div class="card"><h3>🗓️ 历史完成情况</h3><div id="historyList"></div></div>
+    <div class="card">
+      <h3>🗓️ 按日期查询</h3>
+      <div class="form-row">
+        <div><label>选择日期</label><input type="date" id="histDate"></div>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:4px">
+        <button class="btn gray sm" onclick="histShift(-1)">← 前一天</button>
+        <button class="btn primary sm" style="flex:1" onclick="histQuery()">查询</button>
+        <button class="btn gray sm" onclick="histShift(1)">后一天 →</button>
+      </div>
+      <div id="histDetail" style="margin-top:12px"></div>
+    </div>
+    <div class="card"><h3>🗓️ 每日一览（点击日期可查看）</h3><div id="historyList"></div></div>
   </div>
 </div>
 </div>
@@ -440,7 +452,7 @@ function showTab(tab){
   ['today','stars','report','history'].forEach(function(k){ document.getElementById('tab-'+k).classList.toggle('hidden',k!==tab); });
   if(tab==='stars'){ document.getElementById('starsChild').classList.toggle('hidden',session.role!=='child'); document.getElementById('starsParent').classList.toggle('hidden',session.role!=='parent'); renderStars(); }
   if(tab==='report') renderReport();
-  if(tab==='history') renderHistory();
+  if(tab==='history'){ if(!histDateVal()) document.getElementById('histDate').value=todayStr(); renderHistory(); histQuery(); }
 }
 document.querySelectorAll('.tabs button').forEach(b=>b.onclick=function(){ showTab(b.dataset.tab); });
 
@@ -625,15 +637,49 @@ async function renderReport(){
 /* ============== 历史 ============== */
 async function renderHistory(){
   if(document.getElementById('tab-history').classList.contains('hidden')) return;
-  var r=await supabase.from('homework').select('task_date,done,stars,content\:content');
+  var r=await supabase.from('homework').select('task_date,done');
   var rows=r.data||[];
   var map={};
   rows.forEach(x=>{ map[x.task_date]=map[x.task_date]||{t:0,d:0}; map[x.task_date].t++; if(x.done)map[x.task_date].d++; });
   var dates=Object.keys(map).sort().reverse();
   document.getElementById('historyList').innerHTML= dates.length? dates.map(function(d){
     var m=map[d], pct=m.t?Math.round(m.d/m.t*100):0;
-    return `<div class="crow"><span>${esc(d)}</span><span class="cost">${m.d}/${m.t} · ${pct}%</span></div>`;
+    return `<div class="crow" style="cursor:pointer" onclick="pickHistDate('${d}')"><span>${esc(d)}</span><span class="cost">${m.d}/${m.t} · ${pct}%</span><span style="color:var(--brand);font-size:.8rem;white-space:nowrap">查看 ›</span></div>`;
   }).join(''):'<div class="empty">还没有历史，今天开始记录吧~</div>';
+}
+
+/* ============== 按日期查询历史 ============== */
+function histDateVal(){ return document.getElementById('histDate').value; }
+function histShift(off){
+  var d = histDateVal() ? new Date(histDateVal()) : new Date();
+  d.setDate(d.getDate()+off);
+  document.getElementById('histDate').value = dstr2(d);
+  histQuery();
+}
+function pickHistDate(d){ document.getElementById('histDate').value=d; histQuery(); }
+function histCard(t){
+  var photos=(t.photos||[]).map(function(p){ return `<span class="thumb"><img src="${esc(p.url)}" onclick="showLb('${esc(p.url)}')"></span>`; }).join('');
+  var kind = t.kind==='extra' ? '🌟 校外作业' : '📚 家庭作业';
+  return `<div class="item ${t.done?'done':''}">
+    <div class="item-top">
+      <div class="check ${t.done?'on':''}">${t.done?'✓':''}</div>
+      <div class="ibody">
+        <div class="ititle"><span class="subject">${esc(t.subject||'未分类')}</span>${esc(t.content)} <span class="stars-ch">★${awardOf(t)}</span></div>
+        <div class="icontent"></div>
+        <div class="imeta">${kind}${t.minutes?' · ⏱ 预计 '+t.minutes+' 分钟':''}${t.done&&t.completed_at?' · ✅ '+new Date(t.completed_at).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'}):''}</div>
+        ${photos?`<div class="photo-row">${photos}</div>`:''}
+      </div>
+    </div>
+  </div>`;
+}
+async function histQuery(){
+  var ds=histDateVal() || todayStr();
+  document.getElementById('histDate').value = ds;
+  var r=await supabase.from('homework').select('*').eq('task_date',ds).order('created_at');
+  var rows=r.data||[];
+  document.getElementById('histDetail').innerHTML = rows.length
+    ? '<div class="sec-head" style="margin-top:4px"><h2>📅 '+esc(ds)+' 的作业</h2></div><div class="items">'+rows.map(histCard).join('')+'</div>'
+    : '<div class="empty">该日期没有作业记录</div>';
 }
 
 /* ============== 启动 ============== */
