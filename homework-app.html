@@ -349,7 +349,8 @@ function taskCard(t){
     var d= session.role==='parent'? `<button class="del" onclick="delPhoto('${t.id}','${esc(p.id)}')">×</button>`:'';
     return `<span class="thumb"><img src="${esc(p.url)}" onclick="showLb('${esc(p.url)}')">${d}</span>`;
   }).join('');
-  var addPhoto = (!done && t.need_photo && session.role!=='parent') ? `<span class="thumb addphoto"><span class="inner" onclick="openCamInit('${t.id}')">+</span></span>`:'';
+  // 家长可随时传图（作为参考/示例给孩子看）；孩子只在"需拍照"且未完成时传完成照片
+  var addPhoto = (((!done&&t.need_photo) && session.role!=='parent') || session.role==='parent') ? `<span class="thumb addphoto"><span class="inner" onclick="openCamInit('${t.id}')">+</span></span>`:'';
   var timeCtrl='';
   if(!done && t.time_track){
     if(t.active_state==='idle') timeCtrl=`<button class="btn ghost sm" onclick="setState('${t.id}','start')">▶ 开始</button>`;
