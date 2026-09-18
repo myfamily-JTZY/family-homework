@@ -461,8 +461,8 @@ async function addTask(){
 async function delTask(id){ if(!confirm('确定删除这项作业？')) return; await supabase.from('homework').delete().eq('id',id); await loadToday(); render(); }
 
 /* ============== 完成 & 计时 ============== */
-function bonusOf(t){ return (t.time_track && t.minutes && workingOf(t)>0 && workingOf(t)<=t.minutes*60)?1:0; }
-function awardOf(t){ return (t.stars||1) + (t.done?bonusOf(t):0); }
+// 星星固定 = 布置时设置的奖励数，不再自动加成（不用按时奖励）
+function awardOf(t){ return (t.stars||1); }
 async function setDone(id,val){
   var t=today.find(x=>x.id===id); if(!t) return;
   var upd={ done:val };
@@ -556,7 +556,7 @@ async function refreshEarned(){
     var wstart=weekStart(), end=new Date(), dates=[], d=new Date(wstart);
     while(d<=end){ dates.push(dstr2(d)); d.setDate(d.getDate()+1); }
     earnSumCache=0;
-    if(dates.length){ var r=await supabase.from('homework').select('stars,time_track,minutes,working_sec').in('task_date',dates).eq('done',true); earnSumCache=(r.data||[]).reduce(function(a,x){ var bonus=(x.time_track&&x.minutes&&x.working_sec>0&&x.working_sec<=x.minutes*60)?1:0; return a+(x.stars||1)+bonus; },0); }
+    if(dates.length){ var r=await supabase.from('homework').select('stars').in('task_date',dates).eq('done',true); earnSumCache=(r.data||[]).reduce(function(a,x){return a+(x.stars||1);},0); }
   }catch(e){ earnSumCache=0; }
 }
 
