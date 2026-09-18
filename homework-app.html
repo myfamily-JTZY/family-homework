@@ -190,6 +190,7 @@
       <h3>✦ 布置今天的作业</h3>
       <div class="form-row"><div><label>作业内容 *</label><input id="fContent" placeholder="例：完成语文第3课生字抄写"></div><div><label>科目</label><input id="fSubject" placeholder="例：语文 / 数学"></div></div>
       <div class="form-row"><div><label>分类</label><select id="fKind"><option value="homework">家庭作业（老师布置）</option><option value="extra">校外作业</option></select></div><div><label>预计用时（分钟）</label><input id="fMinutes" type="number" min="0" placeholder="30"></div></div>
+      <div class="form-row single"><div><label>奖励星星 ★（每完成1项可得，默认1颗）</label><input id="fStars" type="number" min="1" value="1"></div></div>
       <div class="checkbox"><input type="checkbox" id="fNeedPhoto"><span>需要拍照 / 上传照片留证</span></div>
       <div class="checkbox"><input type="checkbox" id="fNeedTime" checked><span>启用开始/结束计时（用于耗时与按时星）</span></div>
       <button class="btn primary full" style="margin-top:10px" onclick="addTask()">＋ 添加到今天</button>
@@ -369,7 +370,7 @@ function taskCard(t){
     <div class="item-top">
       <div class="check ${done?'on':''}" onclick="setDone('${t.id}',${!done})">${done?'✓':''}</div>
       <div class="ibody">
-        <div class="ititle"><span class="subject">${esc(t.subject||'未分类')}</span>${esc(t.content)} <span class="stars-ch">★${t.stars||1}</span></div>
+        <div class="ititle"><span class="subject">${esc(t.subject||'未分类')}</span>${esc(t.content)} <span class="stars-ch">★${awardOf(t)}</span></div>
         <div class="icontent"></div>
         <div class="imeta">
           ${t.need_photo?'<span class="needphoto">📷 需拍照</span>':''}
@@ -431,7 +432,7 @@ async function addTask(){
   var row={ task_date:todayStr(), content:content, subject:document.getElementById('fSubject').value.trim(),
     kind:document.getElementById('fKind').value, minutes:parseInt(document.getElementById('fMinutes').value)||0,
     need_photo:document.getElementById('fNeedPhoto').checked, time_track:document.getElementById('fNeedTime').checked!==false,
-    stars:1, done:false, photos:[], active_state:'idle', working_sec:0 };
+    stars:parseInt(document.getElementById('fStars').value)||1, done:false, photos:[], active_state:'idle', working_sec:0 };
     try { await supabase.from('homework').insert(row); }
     catch(e){ alert('保存失败：'+ (e&&e.message?e.message:JSON.stringify(e)) + '\n\n若提示表不存在/relation does not exist，说明还没建库：请在 Supabase 的 SQL Editor 里运行 db-setup.sql（见部署指南）。'); return; }
     document.getElementById('fContent').value=''; document.getElementById('fSubject').value=''; document.getElementById('fMinutes').value='';
@@ -441,15 +442,12 @@ async function addTask(){
 async function delTask(id){ if(!confirm('确定删除这项作业？')) return; await supabase.from('homework').delete().eq('id',id); await loadToday(); render(); }
 
 /* ============== 完成 & 计时 ============== */
-function calcStars(t){
-  if(!t.time_track || !t.minutes) return t.stars||1;
-  return (t.stars||1) + ((workingOf(t)>0 && workingOf(t)<=t.minutes*60)?1:0);
-}
+function bonusOf(t){ return (t.time_track && t.minutes && workingOf(t)>0 && workingOf(t)<=t.minutes*60)?1:0; }
+function awardOf(t){ return (t.stars||1) + (t.done?bonusOf(t):0); }
 async function setDone(id,val){
   var t=today.find(x=>x.id===id); if(!t) return;
   var upd={ done:val };
-  if(val){ upd.active_state='done'; upd.completed_at=new Date().toISOString();
-    upd.working_sec=workingOf(t); upd.stars=calcStars(t); }
+  if(val){ upd.active_state='done'; upd.completed_at=new Date().toISOString(); upd.working_sec=workingOf(t); }
   else { upd.active_state='idle'; upd.completed_at=null; upd.working_sec=0; }
   await supabase.from('homework').update(upd).eq('id',id); await loadToday(); render();
 }
@@ -539,7 +537,7 @@ async function refreshEarned(){
     var wstart=weekStart(), end=new Date(), dates=[], d=new Date(wstart);
     while(d<=end){ dates.push(dstr2(d)); d.setDate(d.getDate()+1); }
     earnSumCache=0;
-    if(dates.length){ var r=await supabase.from('homework').select('stars').in('task_date',dates).eq('done',true); earnSumCache=(r.data||[]).reduce(function(a,x){return a+(x.stars||0);},0); }
+    if(dates.length){ var r=await supabase.from('homework').select('stars,time_track,minutes,working_sec').in('task_date',dates).eq('done',true); earnSumCache=(r.data||[]).reduce(function(a,x){ var bonus=(x.time_track&&x.minutes&&x.working_sec>0&&x.working_sec<=x.minutes*60)?1:0; return a+(x.stars||1)+bonus; },0); }
   }catch(e){ earnSumCache=0; }
 }
 
