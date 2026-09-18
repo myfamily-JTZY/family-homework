@@ -66,6 +66,12 @@
 
   .empty{text-align:center;color:var(--muted);padding:26px 10px;font-size:.9rem}
 
+  .subject-group{display:flex;flex-direction:column;gap:10px;margin-top:4px}
+  .subject-head{display:flex;align-items:center;gap:8px;margin:4px 0 2px}
+  .subject-head .subj{background:var(--brand-soft);color:var(--brand);font-size:.82rem;font-weight:800;padding:2px 12px;border-radius:999px}
+  .subject-head .cnt{font-size:.72rem;color:var(--muted);white-space:nowrap}
+  .subject-head::after{content:"";flex:1;height:1px;background:var(--line)}
+
   .btn{border:none;cursor:pointer;font-family:inherit;border-radius:12px;padding:9px 14px;font-size:.92rem;font-weight:700;transition:.2s}
   .btn.primary{background:var(--brand);color:#fff}.btn.primary:hover{background:#c11a5f}
   .btn.ghost{background:var(--brand-soft);color:var(--brand)}
@@ -183,14 +189,14 @@
     <div class="card hidden" id="addCard">
       <h3>✦ 布置今天的作业</h3>
       <div class="form-row"><div><label>作业内容 *</label><input id="fContent" placeholder="例：完成语文第3课生字抄写"></div><div><label>科目</label><input id="fSubject" placeholder="例：语文 / 数学"></div></div>
-      <div class="form-row"><div><label>分类</label><select id="fKind"><option value="homework">家庭作业（老师布置）</option><option value="extra">额外作业（家长安排）</option></select></div><div><label>预计用时（分钟）</label><input id="fMinutes" type="number" min="0" placeholder="30"></div></div>
+      <div class="form-row"><div><label>分类</label><select id="fKind"><option value="homework">家庭作业（老师布置）</option><option value="extra">校外作业</option></select></div><div><label>预计用时（分钟）</label><input id="fMinutes" type="number" min="0" placeholder="30"></div></div>
       <div class="checkbox"><input type="checkbox" id="fNeedPhoto"><span>需要拍照 / 上传照片留证</span></div>
       <div class="checkbox"><input type="checkbox" id="fNeedTime" checked><span>启用开始/结束计时（用于耗时与按时星）</span></div>
       <button class="btn primary full" style="margin-top:10px" onclick="addTask()">＋ 添加到今天</button>
     </div>
 
     <div class="sec"><div class="sec-head"><h2>📚 家庭作业 <span class="pill home">老师布置</span></h2></div><div class="items" id="homeList"></div></div>
-    <div class="sec"><div class="sec-head"><h2>🌟 额外作业 <span class="pill extra">家长安排</span></h2></div><div class="items" id="extraList"></div></div>
+    <div class="sec"><div class="sec-head"><h2>🌟 校外作业 <span class="pill extra">家长安排</span></h2></div><div class="items" id="extraList"></div></div>
   </div>
 
   <div id="tab-stars" class="hidden">
@@ -378,11 +384,22 @@ function taskCard(t){
   </div>`;
 }
 
+function groupBySubject(list){
+  var map={}, order=[];
+  list.forEach(function(t){ var s=(t.subject&&t.subject.trim())?t.subject:'未分类'; if(!map[s]){map[s]=[];order.push(s);} map[s].push(t); });
+  return order.map(function(s){ return {subject:s,items:map[s]}; });
+}
+function renderSectionHtml(list,emptyMsg){
+  if(!list.length) return '<div class="empty">'+emptyMsg+'</div>';
+  return groupBySubject(list).map(function(g){
+    return '<div class="subject-group"><div class="subject-head"><span class="subj">'+esc(g.subject)+'</span><span class="cnt">'+g.items.length+' 项</span></div>'+g.items.map(taskCard).join('')+'</div>';
+  }).join('');
+}
 function render(){
   renderHeader();
   var home=today.filter(t=>t.kind!=='extra'), extra=today.filter(t=>t.kind==='extra');
-  document.getElementById('homeList').innerHTML=home.length?home.map(taskCard).join(''):'<div class="empty">今天还没有家庭作业 ✨</div>';
-  document.getElementById('extraList').innerHTML=extra.length?extra.map(taskCard).join(''):'<div class="empty">暂无额外作业 🌟</div>';
+  document.getElementById('homeList').innerHTML=renderSectionHtml(home,'今天还没有家庭作业 ✨');
+  document.getElementById('extraList').innerHTML=renderSectionHtml(extra,'暂无校外作业 🌟');
   var total=today.length, doneCnt=today.filter(t=>t.done).length;
   var pct=total?Math.round(doneCnt/total*100):0;
   document.getElementById('barFill').style.width=pct+'%'; document.getElementById('pct').textContent=pct+'%';
