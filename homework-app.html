@@ -262,6 +262,7 @@
         <button class="btn primary sm" style="flex:1" onclick="histQuery()">查询</button>
         <button class="btn gray sm" onclick="histShift(1)">后一天 →</button>
       </div>
+      <div id="histSummary" style="margin-top:12px"></div>
       <div id="histDetail" style="margin-top:12px"></div>
     </div>
     <div class="card"><h3>🗓️ 每日一览（点击日期可查看）</h3><div id="historyList"></div></div>
@@ -779,6 +780,20 @@ async function histQuery(){
   document.getElementById('histDate').value = ds;
   var r=await supabase.from('homework').select('*').eq('task_date',ds).order('created_at');
   var rows=r.data||[];
+  // 当天总学习时间（按科目汇总）
+  var elS=document.getElementById('histSummary');
+  var timed=rows.filter(x=>x.working_sec>0);
+  if(timed.length){
+    var map={}, order=[], total=0;
+    timed.forEach(function(x){ var s=(x.subject&&x.subject.trim())?x.subject:'未分类'; var w=x.working_sec||0; total+=w; if(!map[s]){map[s]=0;order.push(s);} map[s]+=w; });
+    var srows=order.map(function(s){return {s:s,t:map[s]};}).sort(function(a,b){return b.t-a.t;});
+    elS.innerHTML='<div class="card" style="background:#fff8f0;border:1px solid var(--line)">'
+      +'<div style="font-weight:800;color:var(--brand);margin-bottom:6px">⏱ '+esc(ds)+' 总学习时间：'+fmtDur(total)+'</div>'
+      +srows.map(function(o){return '<div class="crow"><span>'+esc(o.s)+'</span><span class="cost">'+fmtDur(o.t)+'</span></div>';}).join('')
+      +'</div>';
+  } else {
+    elS.innerHTML='';
+  }
   document.getElementById('histDetail').innerHTML = rows.length
     ? '<div class="sec-head" style="margin-top:4px"><h2>📅 '+esc(ds)+' 的作业</h2></div><div class="items">'+rows.map(histCard).join('')+'</div>'
     : '<div class="empty">该日期没有作业记录</div>';
