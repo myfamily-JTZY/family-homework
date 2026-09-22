@@ -226,9 +226,9 @@
         <button class="btn ghost" onclick="savePins()">保存口令</button>
       </div>
     </div>
-    <div class="card"><h3>📊 本周星星</h3><div class="grid3">
-      <div class="stat"><div class="n" id="wkEarned">0</div><div class="t">本周获得</div></div>
-      <div class="stat"><div class="n" id="wkRedeem">0</div><div class="t">本周已兑</div></div>
+    <div class="card"><h3>⭐ 星星账户（累计获得，兑换后扣减）</h3><div class="grid3">
+      <div class="stat"><div class="n" id="wkEarned">0</div><div class="t">累计获得</div></div>
+      <div class="stat"><div class="n" id="wkRedeem">0</div><div class="t">累计已兑</div></div>
       <div class="stat"><div class="n" id="wkBalance">0</div><div class="t">当前余额</div></div>
     </div></div>
   </div>
@@ -624,31 +624,28 @@ async function savePins(){
 }
 
 function dstr2(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
-function redeemedThisWeek(){ var s=weekStart(); s.setHours(0,0,0,0); var t=s.getTime(); return redemptions.filter(r=>r.status==='approved'&&new Date(r.responded_at).getTime()>=t).reduce((a,r)=>a+r.cost,0); }
 
-var earnSumCache=0;
+var earnTotalCache=0, redeemTotalCache=0;
 async function refreshEarned(){
   try{
-    var wstart=weekStart(), end=new Date(), dates=[], d=new Date(wstart);
-    while(d<=end){ dates.push(dstr2(d)); d.setDate(d.getDate()+1); }
-    earnSumCache=0;
-    if(dates.length){ var r=await supabase.from('homework').select('stars').in('task_date',dates).eq('done',true); earnSumCache=(r.data||[]).reduce(function(a,x){return a+(x.stars||1);},0); }
-  }catch(e){ earnSumCache=0; }
+    var r=await supabase.from('homework').select('stars').eq('done',true);
+    earnTotalCache=(r.data||[]).reduce(function(a,x){return a+(x.stars||1);},0);
+    var r2=await supabase.from('redemptions').select('cost').eq('status','approved');
+    redeemTotalCache=(r2.data||[]).reduce(function(a,x){return a+x.cost;},0);
+  }catch(e){ }
 }
 
 function renderStars(){
   refreshEarned().then(function(){
-    var redeemedN=redeemedThisWeek();
-    var bal=earnSumCache-redeemedN;
-    if(bal<0) bal=0;
-    safeSet('wkEarned',earnSumCache);
-    safeSet('wkRedeem',redeemedN);
+    var bal=balance();
+    safeSet('wkEarned',earnTotalCache);
+    safeSet('wkRedeem',redeemTotalCache);
     safeSet('wkBalance',bal);
     if(document.getElementById('heroStars')) document.getElementById('heroStars').innerHTML='⭐ 星星 '+bal;
     renderPrizeLists(); renderRedemptions();
   });
 }
-function balance(){ return earnSumCache - redeemedThisWeek(); }
+function balance(){ var b=earnTotalCache-redeemTotalCache; return b<0?0:b; }
 function safeSet(id,n){ var el=document.getElementById(id); if(el) el.textContent=n; }
 function prizeThumbs(p,isParent){
   var ph=p.photos||[];
