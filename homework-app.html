@@ -799,13 +799,8 @@ async function histQuery(){
 /* ============== 启动 ============== */
 pickRole('child');
 
-/* ===== 依赖库多地址加载（避免单个 CDN 被墙没反应） ===== */
-var LIB_SOURCES=[
-  'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js',
-  'https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.min.js',
-  'https://gcore.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js',
-  'https://fastly.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js'
-];
+/* ===== 依赖库本地加载（不再从国外 CDN 取，避免慢/超时） ===== */
+var LIB_SOURCES=['./supabase.min.js'];
 function loadLib(i){
   i = i||0;
   if(window.supabase && window.supabase.createClient){ afterLib(); return; }
