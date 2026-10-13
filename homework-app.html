@@ -369,6 +369,27 @@ function notify(msg){ var el=document.getElementById('toast'); if(!el)return; el
 var busyCount=0, busySlow=null;
 function busyShow(){ busyCount++; var el=document.getElementById('busy'); if(el)el.classList.add('show'); if(!busySlow){ busySlow=setTimeout(function(){ busySlow=null; notify('网络较慢，请稍候…'); },12000); } }
 function busyHide(){ if(busyCount>0)busyCount--; if(busyCount===0){ var el=document.getElementById('busy'); if(el)el.classList.remove('show'); if(busySlow){clearTimeout(busySlow);busySlow=null;} } }
+/* 失败自动重试：网络抖动时最多尝试 3 次（间隔 0.7s / 1.4s）；
+   若是"表/列不存在、权限不足"这类确定性错误，则不重试，直接抛出 */
+async function withRetry(run){
+  var tries=3, lastErr=null;
+  for(var i=0;i<tries;i++){
+    try{
+      var res=await run();
+      if(res && res.error){
+        lastErr=res.error;
+        var m=String(res.error.message||'');
+        if(/does not exist|column|relation|permission|denied|JWT|401|403|duplicate|violates/i.test(m)) break;
+      } else { return res; }
+    }catch(e){
+      lastErr=e;
+      var msg=(e&&e.message)?String(e.message):'';
+      if(/does not exist|column|relation|permission|denied|JWT/i.test(msg)) break;
+    }
+    if(i<tries-1){ await new Promise(function(r){ setTimeout(r,700*(i+1)); }); }
+  }
+  throw lastErr;
+}
 async function tickSync(){
   try{ await loadToday(); }catch(e){}
   if(!pollReady){ today.forEach(function(t){ prevDone[t.id]=!!t.done; }); pollReady=true; }
@@ -505,14 +526,14 @@ async function addTask(){
     stars:parseInt(document.getElementById('fStars').value)||1, note:document.getElementById('fNote').value.trim(),
     done:false, photos:[], active_state:'idle', working_sec:0 };
     busyShow();
-    try { await supabase.from('homework').insert(row); }
+    try { await withRetry(function(){ return supabase.from('homework').insert(row); }); }
     catch(e){ busyHide(); alert('保存失败：'+ (e&&e.message?e.message:JSON.stringify(e)) + '\n\n若提示 "column note does not exist"：请在 Supabase 的 SQL Editor 里运行下面这句补列：\nalter table homework add column if not exists note text default \'\';'); return; }
     busyHide();
     document.getElementById('fContent').value=''; document.getElementById('fSubject').value=''; document.getElementById('fMinutes').value=''; document.getElementById('fNote').value='';
   document.getElementById('fNeedPhoto').checked=false;
   await loadToday(); render();
 }
-async function delTask(id){ if(!confirm('确定删除这项作业？')) return; busyShow(); try{ await supabase.from('homework').delete().eq('id',id); }finally{ busyHide(); } await loadToday(); render(); }
+async function delTask(id){ if(!confirm('确定删除这项作业？')) return; busyShow(); try{ await withRetry(function(){ return supabase.from('homework').delete().eq('id',id); }); }finally{ busyHide(); } await loadToday(); render(); }
 var noteEditingId=null;
 function closeNoteModal(){ document.getElementById('noteModal').classList.remove('open'); noteEditingId=null; }
 function editNote(id){
@@ -524,7 +545,7 @@ function editNote(id){
 async function saveNote(){
   if(!noteEditingId){ closeNoteModal(); return; }
   var v=document.getElementById('noteText').value.trim();
-  await supabase.from('homework').update({note:v}).eq('id',noteEditingId);
+  await withRetry(function(){ return supabase.from('homework').update({note:v}).eq('id',noteEditingId); });
   closeNoteModal(); await loadToday(); render();
 }
 
@@ -536,13 +557,13 @@ async function setDone(id,val){
   var upd={ done:val };
   if(val){ upd.active_state='done'; upd.completed_at=new Date().toISOString(); upd.working_sec=workingOf(t); }
   else { upd.active_state='idle'; upd.completed_at=null; upd.working_sec=0; }
-  busyShow(); try{ await supabase.from('homework').update(upd).eq('id',id); }finally{ busyHide(); } await loadToday(); render();
+  busyShow(); try{ await withRetry(function(){ return supabase.from('homework').update(upd).eq('id',id); }); }finally{ busyHide(); } await loadToday(); render();
 }
 async function setState(id,action){
   var t=today.find(x=>x.id===id); if(!t) return; var upd={};
   if(action==='start'){ upd.active_state='running'; upd.start_active_at=new Date().toISOString(); }
   else if(action==='pause'){ upd.active_state='paused'; upd.working_sec=workingOf(t); upd.start_active_at=null; }
-  busyShow(); try{ await supabase.from('homework').update(upd).eq('id',id); }finally{ busyHide(); } await loadToday(); render();
+  busyShow(); try{ await withRetry(function(){ return supabase.from('homework').update(upd).eq('id',id); }); }finally{ busyHide(); } await loadToday(); render();
 }
 
 /* ============== 照片（Supabase 存储） ============== */
