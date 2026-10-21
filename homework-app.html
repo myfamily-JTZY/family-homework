@@ -369,10 +369,10 @@ function notify(msg){ var el=document.getElementById('toast'); if(!el)return; el
 var busyCount=0, busySlow=null;
 function busyShow(){ busyCount++; var el=document.getElementById('busy'); if(el)el.classList.add('show'); if(!busySlow){ busySlow=setTimeout(function(){ busySlow=null; notify('网络较慢，请稍候…'); },12000); } }
 function busyHide(){ if(busyCount>0)busyCount--; if(busyCount===0){ var el=document.getElementById('busy'); if(el)el.classList.remove('show'); if(busySlow){clearTimeout(busySlow);busySlow=null;} } }
-/* 失败自动重试：网络抖动时最多尝试 3 次（间隔 0.7s / 1.4s）；
+/* 失败自动重试：网络抖动时最多尝试 4 次（间隔 1s / 3s / 5s）；
    若是"表/列不存在、权限不足"这类确定性错误，则不重试，直接抛出 */
 async function withRetry(run){
-  var tries=3, lastErr=null;
+  var tries=4, lastErr=null;
   for(var i=0;i<tries;i++){
     try{
       var res=await run();
@@ -386,9 +386,19 @@ async function withRetry(run){
       var msg=(e&&e.message)?String(e.message):'';
       if(/does not exist|column|relation|permission|denied|JWT/i.test(msg)) break;
     }
-    if(i<tries-1){ await new Promise(function(r){ setTimeout(r,700*(i+1)); }); }
+    if(i<tries-1){ await new Promise(function(r){ setTimeout(r,[1000,3000,5000][i]); }); }
   }
   throw lastErr;
+}
+/* 错误分类：网络类错误给友好提示（不再误显示 SQL 补列语句），其他错误才提示数据库信息 */
+function isNetErr(e){ var m=(e&&e.message)?String(e.message):(typeof e==='string'?e:JSON.stringify(e)); return /load failed|failed to fetch|fetch failed|networkerror|network request|timeout|timed ?out|aborted|ERR_NETWORK/i.test(m); }
+function showErr(prefix,e,sqlHint){
+  if(isNetErr(e)){
+    alert(prefix+'：网络连不上云端服务器（已自动重试 4 次仍未成功）。\n\n请尝试：\n① 切换 WiFi / 蜂窝流量后重试\n② 稍等 1-2 分钟再点一次\n\n放心：这次操作没有生效，数据不会丢失、也不会重复。');
+  }else{
+    var m=(e&&e.message)?String(e.message):JSON.stringify(e);
+    alert(prefix+'：'+m+(sqlHint?('\n\n若提示某个列不存在：请在 Supabase 的 SQL Editor 运行：\n'+sqlHint):''));
+  }
 }
 async function tickSync(){
   try{ await loadToday(); }catch(e){}
@@ -405,7 +415,7 @@ function logout(){ if(activeTimer)clearInterval(activeTimer); if(pollTimer)clear
 
 function renderHeader(){
   var d=new Date(); var w=['日','一','二','三','四','五','六'][d.getDay()];
-  document.getElementById('heroDate').textContent = todayStr()+' 周'+w;
+  document.getElementById('heroDate').textContent = todayStr()+' 周'+w+' · v10.14';
   document.getElementById('heroHi').textContent = session.role==='child' ? '今天的事，今天完成！' : '家长工作台 · 今日安排';
 }
 
@@ -415,7 +425,18 @@ function weekStart(){ var d=new Date(); var day=(d.getDay()+6)%7; d.setDate(d.ge
 function secNow(){ return Math.floor(Date.now()/1000); }
 
 async function loadAll(){ await loadSettings(); await Promise.all([loadToday(),loadPrizes(),loadRedemptions()]); render(); }
-async function loadToday(){ try{ var r=await supabase.from('homework').select('*').eq('task_date',todayStr()).order('created_at'); today=r.data||[]; }catch(e){ console.log(e); } }
+var netWasDown=false;
+async function loadToday(){
+  try{
+    var r=await supabase.from('homework').select('*').eq('task_date',todayStr()).order('created_at');
+    if(r && r.error) throw r.error;
+    if(!r || !r.data) throw new Error('empty response');
+    today=r.data; /* 仅在真正拿到数据时才更新，网络失败时保留当前列表不清空 */
+    if(netWasDown){ netWasDown=false; notify('🌐 网络已恢复'); }
+  }catch(e){
+    if(!netWasDown){ netWasDown=true; notify('⚠️ 连不上服务器，显示的可能不是最新数据'); }
+  }
+}
 async function loadPrizes(){ try{ var r=await supabase.from('prizes').select('*').eq('active',true).order('created_at'); prizes=r.data||[]; }catch(e){ console.log(e); } }
 async function loadRedemptions(){ try{ var r=await supabase.from('redemptions').select('*').order('requested_at',{ascending:false}); redemptions=r.data||[]; }catch(e){ console.log(e); } }
 function bindRealtime(){ supabase.channel('hw-realtime').on('postgres_changes',{event:'*',schema:'public',table:'homework'},function(){ loadToday().then(render); }).subscribe(); }
@@ -527,13 +548,13 @@ async function addTask(){
     done:false, photos:[], active_state:'idle', working_sec:0 };
     busyShow();
     try { await withRetry(function(){ return supabase.from('homework').insert(row); }); }
-    catch(e){ busyHide(); alert('保存失败：'+ (e&&e.message?e.message:JSON.stringify(e)) + '\n\n若提示 "column note does not exist"：请在 Supabase 的 SQL Editor 里运行下面这句补列：\nalter table homework add column if not exists note text default \'\';'); return; }
+    catch(e){ busyHide(); showErr('保存失败',e,"alter table homework add column if not exists note text default '';"); return; }
     busyHide();
     document.getElementById('fContent').value=''; document.getElementById('fSubject').value=''; document.getElementById('fMinutes').value=''; document.getElementById('fNote').value='';
   document.getElementById('fNeedPhoto').checked=false;
   await loadToday(); render();
 }
-async function delTask(id){ if(!confirm('确定删除这项作业？')) return; busyShow(); try{ await withRetry(function(){ return supabase.from('homework').delete().eq('id',id); }); }finally{ busyHide(); } await loadToday(); render(); }
+async function delTask(id){ if(!confirm('确定删除这项作业？')) return; busyShow(); try{ await withRetry(function(){ return supabase.from('homework').delete().eq('id',id); }); }catch(e){ showErr('删除失败',e); return; } finally{ busyHide(); } await loadToday(); render(); }
 var noteEditingId=null;
 function closeNoteModal(){ document.getElementById('noteModal').classList.remove('open'); noteEditingId=null; }
 function editNote(id){
@@ -545,7 +566,10 @@ function editNote(id){
 async function saveNote(){
   if(!noteEditingId){ closeNoteModal(); return; }
   var v=document.getElementById('noteText').value.trim();
-  await withRetry(function(){ return supabase.from('homework').update({note:v}).eq('id',noteEditingId); });
+  busyShow();
+  try{ await withRetry(function(){ return supabase.from('homework').update({note:v}).eq('id',noteEditingId); }); }
+  catch(e){ showErr('备注保存失败',e); return; }
+  finally{ busyHide(); }
   closeNoteModal(); await loadToday(); render();
 }
 
@@ -557,13 +581,13 @@ async function setDone(id,val){
   var upd={ done:val };
   if(val){ upd.active_state='done'; upd.completed_at=new Date().toISOString(); upd.working_sec=workingOf(t); }
   else { upd.active_state='idle'; upd.completed_at=null; upd.working_sec=0; }
-  busyShow(); try{ await withRetry(function(){ return supabase.from('homework').update(upd).eq('id',id); }); }finally{ busyHide(); } await loadToday(); render();
+  busyShow(); try{ await withRetry(function(){ return supabase.from('homework').update(upd).eq('id',id); }); }catch(e){ showErr('操作失败',e); return; } finally{ busyHide(); } await loadToday(); render();
 }
 async function setState(id,action){
   var t=today.find(x=>x.id===id); if(!t) return; var upd={};
   if(action==='start'){ upd.active_state='running'; upd.start_active_at=new Date().toISOString(); }
   else if(action==='pause'){ upd.active_state='paused'; upd.working_sec=workingOf(t); upd.start_active_at=null; }
-  busyShow(); try{ await withRetry(function(){ return supabase.from('homework').update(upd).eq('id',id); }); }finally{ busyHide(); } await loadToday(); render();
+  busyShow(); try{ await withRetry(function(){ return supabase.from('homework').update(upd).eq('id',id); }); }catch(e){ showErr('操作失败',e); return; } finally{ busyHide(); } await loadToday(); render();
 }
 
 /* ============== 照片（Supabase 存储） ============== */
